@@ -1,40 +1,52 @@
 # Implement your module commands in this script.
 $env:SIMPLESQLSERVER_CONNECTION_STRING = ""
+
+function BuildServerConStringSQLAuth([string]$server, [string]$db, [string]$user, [string]$pas) {
+    $connectionString = "Server=$server;Database=$db;User Id=$user;Password=$pas;"
+    return $connectionString
+}
+
 function Build-ConnectionString {
     [CmdletBinding()]
     param (
-        [Parameter(Mandatory, ParameterSetName="Server", Position=0)]
-        [Parameter(Mandatory, ParameterSetName="ServerTrusted", Position=1)]
+        [Parameter(Mandatory, ParameterSetName="Server")]
+        [Parameter(Mandatory, ParameterSetName="ServerTrusted")]
         [string]
         $Server,
-        [Parameter(Mandatory, ParameterSetName="DataSource", Position=0)]
-        [Parameter(Mandatory, ParameterSetName="DataSourceIntegratedSecurity", Position=1)]
+        [Parameter(Mandatory, ParameterSetName="DataSource")]
+        [Parameter(Mandatory, ParameterSetName="DataSourceIntegratedSecurity")]
         [string]
         $DataSource,
-        [Parameter(Mandatory, ParameterSetName="Server", Position=1)]
-        [Parameter(Mandatory, ParameterSetName="ServerTrusted", Position=2)]
-        [Parameter(Mandatory, ParameterSetName="DataSource", Position=1)]
-        [Parameter(Mandatory, ParameterSetName="DataSourceIntegratedSecurity", Position=2)]
+        [Parameter(Mandatory, ParameterSetName="Server")]
+        [Parameter(Mandatory, ParameterSetName="ServerTrusted")]
+        [Parameter(Mandatory, ParameterSetName="DataSource")]
+        [Parameter(Mandatory, ParameterSetName="DataSourceIntegratedSecurity")]
         [string]
         $Database,
-        [Parameter(Mandatory, ParameterSetName="ServerTrusted", Position=0)]
+        [Parameter(ParameterSetName="ServerTrusted")]
         [switch]
         $Trusted,
-        [Parameter(Mandatory, ParameterSetName="DataSourceIntegratedSecurity", Position=0)]
+        [Parameter(ParameterSetName="DataSourceIntegratedSecurity")]
         [switch]
         $IntegratedSecurity,
-        [Parameter(Mandatory, ParameterSetName="Server", Position=2)]
+        [Parameter(Mandatory=$false, ParameterSetName="Server")]
         [Parameter(Mandatory=$false, ParameterSetName="ServerTrusted")]
-        [Parameter(Mandatory, ParameterSetName="DataSource", Position=2)]
+        [Parameter(Mandatory=$false, ParameterSetName="DataSource")]
         [Parameter(Mandatory=$false, ParameterSetName="DataSourceIntegratedSecurity")]
         [string]
         $UserName,
-        [Parameter(Mandatory, ParameterSetName="Server", Position=2)]
+        [Parameter(Mandatory=$false, ParameterSetName="Server")]
         [Parameter(Mandatory=$false, ParameterSetName="ServerTrusted")]
-        [Parameter(Mandatory, ParameterSetName="DataSource", Position=2)]
+        [Parameter(Mandatory=$false, ParameterSetName="DataSource")]
         [Parameter(Mandatory=$false, ParameterSetName="DataSourceIntegratedSecurity")]
         [pscredential]
-        $Password
+        $Password,
+        [Parameter(Mandatory=$false, ParameterSetName="Server")]
+        [Parameter(Mandatory=$false, ParameterSetName="ServerTrusted")]
+        [Parameter(Mandatory=$false, ParameterSetName="DataSource")]
+        [Parameter(Mandatory=$false, ParameterSetName="DataSourceIntegratedSecurity")]
+        [switch]
+        $SetAsEnviromentConnectionString
     )
     
     begin {
@@ -65,7 +77,11 @@ function Build-ConnectionString {
             $connectionString += "User Id=$UserName;Password=$($Password.GetNetworkCredential().Password);"
         }
 
-        return $connectionString
+        if($SetAsEnviromentConnectionString){
+            Set-EnvironmentConnectionString -ConnectionString $connectionString
+        }else{
+            return $connectionString
+        }
     }
     
     end {
