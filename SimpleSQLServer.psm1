@@ -1,6 +1,3 @@
-# Implement your module commands in this script.
-$env:SIMPLESQLSERVER_CONNECTION_STRING = ""
-
 function Set-EnvironmentConnectionString {
     [CmdletBinding()]
     param (
@@ -81,6 +78,11 @@ function Invoke-SQLSelectQuery {
         ParameterSetName='FromFile')]
         [Parameter(Mandatory=$False,
         ParameterSetName='FromString')]
+        [hashtable]$Parameters,
+        [Parameter(Mandatory=$False,
+        ParameterSetName='FromFile')]
+        [Parameter(Mandatory=$False,
+        ParameterSetName='FromString')]
         [switch]
         $CloseConnection
     )
@@ -106,6 +108,11 @@ function Invoke-SQLSelectQuery {
     process {
         $sqlCommand = New-Object System.Data.SqlClient.SqlCommand($query, $SQLConnection)
 
+        if($Parameters){
+            $Parameters.Keys | ForEach-Object {
+                $sqlCommand.Parameters.AddWithValue($key, $Parameters[$key]) | Out-Null
+            }
+        }
 
         if($SQLConnection.State -eq [System.Data.ConnectionState]::Closed){
             $SQLConnection.Open()
@@ -127,7 +134,7 @@ function Invoke-SQLSelectQuery {
     }
 }
 
-function Add-SQLRecord {
+function Invoke-SQLNonQuery {
     [CmdletBinding()]
     param (
         [Parameter(Mandatory,
@@ -139,11 +146,16 @@ function Add-SQLRecord {
         [Parameter(Mandatory,
         ParameterSetName='FromString')]
         [string]
-        $InsertQueryText,
+        $QueryText,
         [Parameter(Mandatory,
         ParameterSetName='FromFile')]
         [string]
-        $SQLInsertQueryFile,
+        $QueryFile,
+        [Parameter(Mandatory=$False,
+        ParameterSetName='FromFile')]
+        [Parameter(Mandatory=$False,
+        ParameterSetName='FromString')]
+        [hashtable]$Parameters,
         [Parameter(Mandatory=$False,
         ParameterSetName='FromFile')]
         [Parameter(Mandatory=$False,
@@ -155,23 +167,29 @@ function Add-SQLRecord {
     begin {
         $query = [string]::Empty
         if($PSCmdlet.ParameterSetName -eq 'FromString'){
-            if(-not([string]::IsNullOrWhiteSpace($InsertQueryText) -and [string]::IsNullOrEmpty($InsertQueryText))){
-                $query = $InsertQueryText
+            if(-not([string]::IsNullOrWhiteSpace($QueryText) -and [string]::IsNullOrEmpty($QueryText))){
+                $query = $QueryText
             }else{
                 throw [System.Management.Automation.PSArgumentNullException] "query string passed null or empty"
             }
             
         }else{
-            if(Test-Path $SQLInsertQueryFile){
-                $query = [System.IO.File]::ReadAllText($SQLInsertQueryFile)
+            if(Test-Path $QueryFile){
+                $query = [System.IO.File]::ReadAllText($QueryFile)
             }else{
-                throw [System.IO.FileNotFoundException] "$SQLInsertQueryFile not found."
+                throw [System.IO.FileNotFoundException] "$QueryFile not found."
             }
         }
     }
     
     process {
         $sqlCommand = New-Object System.Data.SqlClient.SqlCommand($query, $SQLConnection)
+
+        if($Parameters){
+            $Parameters.Keys | ForEach-Object {
+                $sqlCommand.Parameters.AddWithValue($key, $Parameters[$key]) | Out-Null
+            }
+        }
 
         if($SQLConnection.State -eq [System.Data.ConnectionState]::Closed){
             $SQLConnection.Open()
@@ -188,6 +206,8 @@ function Add-SQLRecord {
         
     }
 }
+
+
 
 # Export only the functions using PowerShell standard verb-noun naming.
 Export-ModuleMember -Function *-*
