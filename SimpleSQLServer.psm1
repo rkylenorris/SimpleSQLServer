@@ -27,9 +27,7 @@ function New-SQLConnection {
         # sql server connection string
         [Parameter(Mandatory=$False)]
         [string]
-        $ConnectionString=$env:SIMPLESQLSERVER_CONNECTION_STRING,
-        [switch]
-        $Open
+        $ConnectionString=$env:SIMPLESQLSERVER_CONNECTION_STRING
     )
     
     begin {
@@ -46,9 +44,14 @@ function New-SQLConnection {
             return $null
         }
         
-        if($Open){
+        try{
             $connection.Open()
+        }catch{
+            Write-Error "SQL Connection Error: $_"
+            return $null
         }
+        
+
         return $connection
     }
     
@@ -114,13 +117,19 @@ function Invoke-SQLSelectQuery {
             }
         }
 
-        if($SQLConnection.State -eq [System.Data.ConnectionState]::Closed){
-            $SQLConnection.Open()
-        }
-
         $sqlAdapter = New-Object System.Data.SqlClient.SqlDataAdapter $sqlCommand
         $dataset = New-Object System.Data.DataSet
-        $sqlAdapter.Fill($dataset) | Out-Null
+
+        try{
+            $sqlAdapter.Fill($dataset) | Out-Null
+        }catch{
+            Write-Error "SQL Adapter Fill Error: $_"
+            if($CloseConnection){
+                $SQLConnection.Close()
+            }
+            return $null
+        }
+        
 
         if($CloseConnection){
             $SQLConnection.Close()
@@ -191,11 +200,14 @@ function Invoke-SQLNonQuery {
             }
         }
 
-        if($SQLConnection.State -eq [System.Data.ConnectionState]::Closed){
-            $SQLConnection.Open()
-        }
+        
 
-        $sqlCommand.ExecuteNonQuery() | Out-Null
+        try {
+            $sqlCommand.ExecuteNonQuery() | Out-Null
+        }
+        catch {
+            Write-Error "SQL Execute Non Query Error: $_"
+        }
 
         if($CloseConnection){
             $SQLConnection.Close()
@@ -207,7 +219,52 @@ function Invoke-SQLNonQuery {
     }
 }
 
+function Invoke-SQLBulkInsert {
+    [CmdletBinding()]
+    param (
+        [Parameter(Mandatory)]
+        [system.data.SqlClient.SQLConnection]
+        $SQLConnection,
+        [Parameter(Mandatory)]
+        [string]
+        $TableName,
+        [Parameter(Mandatory)]
+        [System.Data.DataTable]
+        $DataTable,
+        [Parameter(Mandatory=$false)]
+        [switch]
+        $CloseConnection
+    )
+    
+    begin {
+        
+    }
+    
+    process {
+        $bulkCopy = New-Object System.Data.SqlClient.SqlBulkCopy($SQLConnection)
+        $bulkCopy.DestinationTableName = $TableName
 
+        try{
+            if($SQLConnection.State -eq [System.Data.ConnectionState]::Closed){
+                $SQLConnection.Open()
+            }
+
+            $bulkCopy.WriteToServer($DataTable)
+
+            if($CloseConnection){
+                $SQLConnection.Close()
+            }
+        }catch{
+            Write-Error "BulkInsert Error: $_"
+        }finally{
+            $bulkCopy.Dispose()
+        }
+    }
+    
+    end {
+        
+    }
+}
 
 # Export only the functions using PowerShell standard verb-noun naming.
 Export-ModuleMember -Function *-*
