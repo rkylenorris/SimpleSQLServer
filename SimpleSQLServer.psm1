@@ -337,10 +337,10 @@ function Import-CSVToDataTable {
         [string]
         $Path,
         # Parameter help description
-        [Parameter(Mandatory)]
+        [Parameter(Mandatory=$false)]
         [ValidateSet("Comma", "Tab", "Pipe")]
         [string]
-        $DelimiterChoice,
+        $DelimiterChoice="Comma",
         # starting row of file if not first
         [Parameter(Mandatory = $false)]
         [int]
@@ -415,5 +415,43 @@ function Import-CSVToDataTable {
     
     end {
         
+    }
+}
+
+function Invoke-SQLStoredProcedure {
+    [CmdletBinding()]
+    param (
+        [Parameter(Mandatory)]
+        [System.Data.SqlClient.SQLConnection]$SQLConnection,
+
+        [Parameter(Mandatory)]
+        [string]$ProcedureName,
+
+        [Parameter(Mandatory=$False)]
+        [hashtable]$Parameters,
+
+        [Parameter(Mandatory=$False)]
+        [switch]$CloseConnection
+    )
+
+    process {
+        $sqlCommand = New-Object System.Data.SqlClient.SqlCommand($ProcedureName, $SQLConnection)
+        $sqlCommand.CommandType = [System.Data.CommandType]::StoredProcedure
+
+        if ($Parameters) {
+            foreach ($key in $Parameters.Keys) {
+                $sqlCommand.Parameters.AddWithValue($key, $Parameters[$key]) | Out-Null
+            }
+        }
+
+        if($SQLConnection.State -eq [System.Data.ConnectionState]::Closed){
+            $SQLConnection.Open()
+        }
+
+        $sqlCommand.ExecuteNonQuery() | Out-Null
+
+        if($CloseConnection){
+            $SQLConnection.Close()
+        }
     }
 }
