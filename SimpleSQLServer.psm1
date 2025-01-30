@@ -20,6 +20,7 @@ function Set-EnvironmentConnectionString {
     }
 }
 
+New-Alias -Name scns -Value Set-EnvironmentConnectionString
 
 function New-SQLConnection {
     [CmdletBinding()]
@@ -59,6 +60,8 @@ function New-SQLConnection {
         
     }
 }
+
+New-Alias -Name ncn -Value New-SQLConnection
 
 function Invoke-SQLSelectQuery {
     [CmdletBinding()]
@@ -143,6 +146,8 @@ function Invoke-SQLSelectQuery {
     }
 }
 
+New-Alias -Name sqlslt -Value Invoke-SQLSelectQuery
+
 function Invoke-SQLNonQuery {
     [CmdletBinding()]
     param (
@@ -219,6 +224,8 @@ function Invoke-SQLNonQuery {
     }
 }
 
+New-Alias -Name sqlnq -Value Invoke-SQLNonQuery
+
 function Invoke-SQLBulkInsert {
     [CmdletBinding()]
     param (
@@ -266,5 +273,147 @@ function Invoke-SQLBulkInsert {
     }
 }
 
-# Export only the functions using PowerShell standard verb-noun naming.
-Export-ModuleMember -Function *-*
+New-Alias -Name sqlblk -Value Invoke-SQLBulkInsert
+
+function Invoke-TextQualifierRegex {
+    # creates regex expressions for removing text qualifiers, then removes them per line
+    param (
+        [Parameter(Mandatory = $true)]
+        [ValidateSet("Comma", "Tab", "Pipe")]
+        [string]$Delimiter,
+        [Parameter(Mandatory = $true)]
+        [string]
+        $Line
+    )
+
+    $DelimiterCode = switch ($Delimiter) {
+        'Comma' { "," }
+        'Tab' { "\t" }
+        'Pipe' { "\|" }
+        Default { "" }
+    }
+
+    $regex_patterns = @{
+        main  = '(?m)"([^' + $DelimiterCode + ']*?)"(?=' + $DelimiterCode + '|$)'
+        inner = '(?<=' + $DelimiterCode + ')"'
+    }
+
+    $new_line = $Line
+    $new_line = $new_line -replace $regex_patterns.main, '$1'
+    $new_line = $new_line -replace $regex_patterns.inner, ''
+
+    return $new_line
+}
+
+function Infer-DataType {
+    param (
+        [string]$Value
+    )
+    $today = Get-Date
+    if ([int]::TryParse($Value, [ref]$null)) {
+        return [int]
+    }
+    elseif ([double]::TryParse($Value, [ref]$null)) {
+        return [double]
+    }
+    elseif ([datetime]::TryParse($Value, [ref]$today)) {
+        return [datetime]
+    }
+    elseif ($Value -match '^(?i)(true|false)$') {
+        return [bool]
+    }
+    else {
+        return [string]
+    }
+}
+
+
+function Import-CSVToDataTable {
+    [CmdletBinding()]
+    [OutputType([System.Data.DataTable])]
+    param (
+        # Path to CSV
+        [Parameter(Mandatory)]
+        [string]
+        $Path,
+        # Parameter help description
+        [Parameter(Mandatory)]
+        [ValidateSet("Comma", "Tab", "Pipe")]
+        [string]
+        $DelimiterChoice,
+        # starting row of file if not first
+        [Parameter(Mandatory = $false)]
+        [int]
+        $StartRow = 0,
+        # Provide headers if not in file
+        [Parameter(Mandatory = $false)]
+        [string[]]
+        $Headers
+    )
+    
+    begin {
+        if (-not (Test-Path $Path)) {
+            throw FileNotFoundException("Path $path does not exist")
+        }
+
+     
+        $Delimiter = switch ($DelimiterChoice) {
+            'Comma' { "," }
+            'Tab' { "t" }
+            'Pipe' { "|" }
+            Default { "" }
+        }
+    }
+    
+    process {
+        $reader = New-Object System.IO.StreamReader $Path
+        $dt = New-Object System.Data.DataTable
+        if ($StartRow -gt 0) {
+            for ($i = 0; $i -lt $StartRow; $i++) {
+                $reader.ReadLine() | Out-Null
+            }
+        }
+        if ($Headers.Count -gt 0) {
+            $columns = $Headers
+        }
+        else {
+            $headerRow = $reader.ReadLine()
+            $headerRowCleaned = Invoke-TextQualifierRegex -Delimiter $DelimiterChoice -Line $headerRow
+            $columns = $headerRowCleaned -split $Delimiter
+        }
+        $firstRow = (Invoke-TextQualifierRegex -Delimiter $DelimiterChoice -Line $reader.ReadLine()) -split $Delimiter
+            
+            
+        for ($i = 0; $i -lt $columns.Count; $i++) {
+            $columnName = $columns[$i]
+            $columnType = Infer-DataType -Value $firstRow[$i]
+            $col = New-Object System.Data.DataColumn $columnName, $columnType
+            $dt.Columns.Add($col)
+        }
+
+        $firstDTRow = $dt.NewRow()
+        for ($i = 0; $i -lt $firstRow.Count; $i++) {
+            $firstDTRow[$columns[$i]] = $firstRow[$i]
+        }
+
+        $dt.Rows.Add($firstDTRow)
+
+        while (($line = $reader.ReadLine()) -ne $null) {
+            $cleanedLine = (Invoke-TextQualifierRegex -Delimiter $DelimiterChoice -Line $line) -split $Delimiter
+            $row = $dt.NewRow()
+            for ($i = 0; $i -lt $cleanedLine.Count; $i++) {
+                $row[$columns[$i]] = $cleanedLine[$i]
+            }
+            $dt.Rows.Add($row)
+        }
+    
+        $dt.AcceptChanges()
+
+        return ,$dt
+        
+    }
+    
+    end {
+        
+    }
+}
