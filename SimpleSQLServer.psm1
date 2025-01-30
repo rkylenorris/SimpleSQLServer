@@ -448,10 +448,18 @@ function Invoke-SQLStoredProcedure {
             $SQLConnection.Open()
         }
 
-        $sqlCommand.ExecuteNonQuery() | Out-Null
-
-        if($CloseConnection){
-            $SQLConnection.Close()
+        
+        try {
+            $sqlCommand.ExecuteNonQuery() | Out-Null
         }
+        catch {
+            Write-Error "SQL Stored Procedure error: $_"
+            return
+        }finally{
+            if($CloseConnection){
+                $SQLConnection.Close()
+            }
+        }
+        
     }
 }
